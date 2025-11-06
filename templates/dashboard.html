@@ -12,21 +12,11 @@
       <div class="filter-group-slipt">
         <div class="filter-group">
           <label for="filter-instructor">by Instructor:</label>
-          <input
-            type="text"
-            id="filter-instructor"
-            name="instructor"
-            placeholder="Instructor name..."
-          />
+          <input type="search" id="filter-instructor" name="instructor" placeholder="Instructor name..." />
         </div>
         <div class="filter-group">
           <label for="filter-group">by Group:</label>
-          <input
-            type="text"
-            id="filter-group"
-            name="group"
-            placeholder="Group name..."
-          />
+          <input type="search" id="filter-group" name="group" placeholder="Group name..." />
         </div>
       </div>
       <div class="filter-group filter-group--checkbox">
@@ -44,6 +34,7 @@
   .data-table .col-extra {
     display: table-cell;
   }
+
   .data-table .col-simple {
     display: none;
   }
@@ -51,6 +42,7 @@
   .data-table.view-simple .col-extra {
     display: none;
   }
+
   .data-table.view-simple .col-simple {
     display: table-cell;
     text-align: center;

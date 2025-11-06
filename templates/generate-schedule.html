@@ -10,25 +10,13 @@ upload_errors|length > 0 %}
   </ul>
 </div>
 {% endif %} {% if data %} {% include "dashboard.html" %} {% else %}
-<form
-  class="upload-form"
-  action="/generate-schedule"
-  method="POST"
-  enctype="multipart/form-data"
->
+<form class="upload-form" action="/generate-schedule" method="POST" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
   <label for="file-upload" class="upload-zone">
     <span class="upload-icon"> {{ icons.CloudUploadIcon(32) }} </span>
     <span class="upload-text">Upload files</span>
 
-    <input
-      id="file-upload"
-      name="files"
-      type="file"
-      multiple
-      class="upload-zone-input"
-      accept=".xls,.xlsx"
-    />
+    <input id="file-upload" name="files" type="file" multiple class="upload-zone-input" accept=".xls,.xlsx" />
   </label>
 
   <div id="file-error-message" class="file-error"></div>
@@ -242,6 +230,10 @@ upload_errors|length > 0 %}
 
       processButton.disabled = true;
       processButton.classList.add("is-loading");
+
+      document.querySelectorAll(".remove-file-btn").forEach((btn) => {
+        btn.disabled = true;
+      });
     });
   }
 
@@ -255,6 +247,9 @@ upload_errors|length > 0 %}
         processButton.disabled = false;
       }
     }
+    document.querySelectorAll(".remove-file-btn").forEach((btn) => {
+      btn.disabled = false;
+    });
   });
 </script>
 

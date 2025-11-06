@@ -163,9 +163,9 @@ const manager = (function () {
             b = list[j];
           if (
             utils.parseTimeToMinutes(a.data["Start Time"]) <
-              utils.parseTimeToMinutes(b.data["End Time"]) &&
+            utils.parseTimeToMinutes(b.data["End Time"]) &&
             utils.parseTimeToMinutes(b.data["Start Time"]) <
-              utils.parseTimeToMinutes(a.data["End Time"])
+            utils.parseTimeToMinutes(a.data["End Time"])
           ) {
             a.overlapped = b.overlapped = true;
           }
@@ -305,7 +305,7 @@ const manager = (function () {
         try {
           const errorResult = await response.json();
           errorMsg = errorResult.message || errorMsg;
-        } catch (e) {}
+        } catch (e) { }
         throw new Error(errorMsg);
       }
 
@@ -326,11 +326,19 @@ const manager = (function () {
   }
 
   function bindEvents() {
+    // filterInstructor.addEventListener(
+    //   "keyup",
+    //   utils.debounce(onFilterChange, 120)
+    // );
+    // filterGroup.addEventListener("keyup", utils.debounce(onFilterChange, 120));
     filterInstructor.addEventListener(
-      "keyup",
+      "input",
       utils.debounce(onFilterChange, 120)
     );
-    filterGroup.addEventListener("keyup", utils.debounce(onFilterChange, 120));
+    filterGroup.addEventListener(
+      "input",
+      utils.debounce(onFilterChange, 120)
+    );
     filterOverlaps.addEventListener("change", onFilterChange);
 
     clearFiltersBtn.addEventListener("click", () => {

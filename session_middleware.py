@@ -10,6 +10,7 @@ from config import REDIS_URL, SESSION_COOKIE_NAME
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
+
 class RedisSessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -56,7 +57,9 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
             try:
                 data_to_save_json = json.dumps(request.state.session)
                 await redis_client.set(
-                    f"session:{session_id}", data_to_save_json, ex=60 * 60 * 24 * 7
+                    f"session:{session_id}",
+                    data_to_save_json,
+                    ex=60 * 60 * 8,  # 8 horas
                 )
             except Exception as e:
                 print(f"Error guardando la sesión en Redis: {e}")
@@ -67,7 +70,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                     value=session_id,
                     httponly=True,
                     samesite="lax",
-                    max_age=60 * 60 * 24 * 7,
+                    max_age=60 * 60 * 8,  # 8 horas
                 )
 
         return response

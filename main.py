@@ -8,7 +8,7 @@ from fastapi import (
     Form,
     Depends,
     HTTPException,
-    status
+    status,
 )
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
@@ -21,14 +21,12 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from typing import List, Dict, Any
 
-# --- Importaciones de nuestros módulos refactorizados ---
 import config
 import security
 import schedule_service
 import file_processing
 import response_generators
 from session_middleware import RedisSessionMiddleware
-# --------------------------------------------------------
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -47,6 +45,7 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Endpoints de la Aplicación ---
 
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     token = security.get_or_create_csrf_token(request.state.session)
@@ -64,7 +63,7 @@ async def read_schedule(request: Request):
 
     data_to_render = schedule_service.filter_active_rows(all_rows)
     num_deleted_rows = schedule_service.get_deleted_rows_count(all_rows)
-    
+
     token = security.get_or_create_csrf_token(request.state.session)
     upload_errors = request.state.session.pop("upload_errors", [])
 
@@ -103,20 +102,20 @@ async def generate_schedule(
             continue
 
         content = await file.read()
-        
+
         # 1. Validar archivo (Lógica en file_processing)
         error = file_processing.validate_file(file, content)
         if error:
             upload_errors.append(error)
             continue
-        
+
         # 2. Parsear archivo (Lógica en file_processing)
         try:
             new_schedules = await file_processing.process_single_file(file, content)
-            
+
             # 3. Fusionar datos (Lógica en schedule_service)
             all_rows = schedule_service.merge_new_schedules(all_rows, new_schedules)
-            
+
             newly_processed_files.append(file.filename)
 
         except Exception as e:
@@ -130,7 +129,7 @@ async def generate_schedule(
 
     request.state.session["schedule_data"] = schedule_data
     request.state.session["upload_errors"] = upload_errors
-    
+
     return RedirectResponse(url="/generate-schedule", status_code=303)
 
 
@@ -181,7 +180,9 @@ async def delete_selected_rows(
     all_rows = schedule_data.get("all_rows", [])
 
     # Usar el servicio para la lógica de borrado
-    all_rows, deleted_count = schedule_service.delete_rows_by_id(all_rows, ids_to_delete)
+    all_rows, deleted_count = schedule_service.delete_rows_by_id(
+        all_rows, ids_to_delete
+    )
 
     # Lógica de sesión restante
     if not schedule_service.filter_active_rows(all_rows):
@@ -219,10 +220,12 @@ async def restore_deleted_rows(
 
 @app.post("/delete-data", response_class=JSONResponse)
 @security.limiter.limit("10/minute")
-async def delete_data(request: Request, is_csrf_valid: bool = Depends(security.validate_csrf)):
+async def delete_data(
+    request: Request, is_csrf_valid: bool = Depends(security.validate_csrf)
+):
     # Usar el servicio para obtener un estado vacío
     request.state.session["schedule_data"] = schedule_service.get_empty_schedule_data()
-    request.state.session_cleared = True
+    # request.state.session_cleared = True
     return JSONResponse({"success": True, "message": "All data cleared."})
 
 
@@ -233,10 +236,10 @@ async def get_schedule_tsv(request: Request):
         "schedule_data", schedule_service.get_empty_schedule_data()
     )
     all_rows = schedule_data.get("all_rows", [])
-    
+
     active_rows = schedule_service.filter_active_rows(all_rows)
     active_rows_data = [row["data"] for row in active_rows]
-    
+
     # Usar el generador de respuestas
     return response_generators.generate_tsv_response(active_rows_data)
 
@@ -248,9 +251,9 @@ async def download_excel(request: Request):
         "schedule_data", schedule_service.get_empty_schedule_data()
     )
     all_rows = schedule_data.get("all_rows", [])
-    
+
     active_rows = schedule_service.filter_active_rows(all_rows)
     active_rows_data = [row["data"] for row in active_rows]
-    
+
     # Usar el generador de respuestas
     return response_generators.generate_excel_response(active_rows_data)
