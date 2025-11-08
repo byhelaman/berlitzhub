@@ -19,7 +19,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <span class="selection-text">Selected: <span id="stat-selected">0</span></span>
         <input type="hidden" name="selected_ids" id="selected_ids" />
-        <button type="submit" class="btn btn--icon btn--danger" aria-label="Delete selected" disabled>
+        <!-- <button type="submit" class="btn btn--icon btn--danger" aria-label="Delete selected" disabled> -->
+        <button type="submit" class="btn btn--icon" aria-label="Delete selected" disabled>
           {{ icons.TrashIcon(16) }}
         </button>
       </form>

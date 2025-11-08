@@ -10,21 +10,24 @@ from fastapi import (
     HTTPException,
     status,
 )
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     HTMLResponse,
     RedirectResponse,
     JSONResponse,
 )
+import uuid
+from sqlalchemy.future import select
+
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from typing import List, Dict, Any, Optional
 
-from database import get_db  # NUEVO
-from sqlalchemy.ext.asyncio import AsyncSession  # NUEVO
+from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Importamos los módulos que ya creamos
 from database import engine, AsyncSessionLocal, Base
 import db_models
 from security import get_password_hash
@@ -35,12 +38,31 @@ import schedule_service
 import file_processing
 from contextlib import asynccontextmanager
 import response_generators
-import auth  # NUEVO
-import zoom_oauth  # NUEVO
-from auth import User  # NUEVO
+import auth
+import zoom_oauth
+from auth import User
 from database import engine, Base
 
 from session_middleware import RedisSessionMiddleware
+
+
+# --- Middleware de Headers de Seguridad ---
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Headers de seguridad esenciales
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # CSP básica - ajustar según necesidades específicas
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        )
+        return response
 
 
 # --- NUEVO: Lifespan para la Base de Datos ---
@@ -66,6 +88,7 @@ async def lifespan(app: FastAPI):
 # app = FastAPI()
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Configuración de Rate Limiter
 app.state.limiter = security.limiter
@@ -90,28 +113,41 @@ async def login_get(request: Request):
 
 
 @app.post("/login", response_class=RedirectResponse)
+@security.limiter.limit("5/minute")  # ¡RATE LIMITING AGREGADO!
 async def login_post(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
-    # En la vida real, usa OAuth2PasswordRequestForm
-    # No validamos CSRF aquí porque el login debe ser simple
-    # pero en producción deberías añadirlo.
 ):
     user = await auth.authenticate_user(db, username, password)
 
     if not user:
-        # Manejo de error (ej. redirigir de vuelta con error)
-        return RedirectResponse(url="/login?error=1", status_code=303)
+        # Mensaje idéntico para usuario existente o no existente
+        return RedirectResponse(url="/login?result=auth", status_code=303)
 
-    # ¡Login exitoso! Guardamos el ID en la sesión
-    request.state.session["user_id"] = user.id  # user.id ahora viene de la BD
+    # ¡Login exitoso! Rotación de sesión por seguridad
+    old_session_id = request.state.session_id
+
+    # Crear nueva sesión
+    new_session_id = str(uuid.uuid4())
+    request.state.session_id = new_session_id
+    request.state.session.clear()
+
+    # Establecer nueva sesión
+    request.state.session["user_id"] = user.id
     request.state.session["is_authenticated"] = True
+    request.state.session["schedule_data"] = {
+        "processed_files": [],
+        "all_rows": [],
+    }
 
-    # Convertimos el modelo de BD a Pydantic para el estado
+    # Convertir el modelo de BD a Pydantic
     request.state.user = auth.User.model_validate(user)
     request.state.is_authenticated = True
+
+    # Marcar sesión anterior para limpieza
+    request.state.old_session_id = old_session_id
 
     return RedirectResponse(url="/profile", status_code=303)
 
@@ -464,3 +500,75 @@ async def download_excel(request: Request):
 
     # Usar el generador de respuestas
     return response_generators.generate_excel_response(active_rows_data)
+
+
+# --- Endpoints de Administración de Usuarios ---
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_list(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(auth.get_current_admin_user),
+):
+    """
+    Lista todos los usuarios (solo para admins)
+    """
+    users = await auth.get_all_users_from_db(db)
+
+    token = security.get_or_create_csrf_token(request.state.session)
+
+    return templates.TemplateResponse(
+        "admin_users.html",
+        {
+            "request": request,
+            "users": users,
+            "current_user": current_user,
+            "csrf_token": token,
+        },
+    )
+
+
+@app.post("/admin/users", response_class=RedirectResponse)
+async def admin_create_user(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    full_name: str = Form(...),
+    role: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(auth.get_current_admin_user),
+    is_csrf_valid: bool = Depends(security.validate_csrf),
+):
+    """
+    Crear nuevo usuario (solo para admins)
+    """
+    try:
+        await auth.create_user_in_db(
+            db=db, username=username, password=password, full_name=full_name, role=role
+        )
+        return RedirectResponse(
+            url="/admin/users?success=user_created", status_code=303
+        )
+    except HTTPException as e:
+        return RedirectResponse(url=f"/admin/users?error={e.detail}", status_code=303)
+
+
+@app.post("/admin/users/{user_id}/delete", response_class=RedirectResponse)
+async def admin_delete_user(
+    request: Request,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(auth.get_current_admin_user),
+    is_csrf_valid: bool = Depends(security.validate_csrf),
+):
+    """
+    Eliminar usuario (solo para admins)
+    """
+    try:
+        await auth.delete_user_from_db(db, user_id, current_user.id)
+        return RedirectResponse(
+            url="/admin/users?success=user_deleted", status_code=303
+        )
+    except HTTPException as e:
+        return RedirectResponse(url=f"/admin/users?error={e.detail}", status_code=303)

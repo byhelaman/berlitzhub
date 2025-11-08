@@ -1,6 +1,6 @@
 # security.py
 import secrets
-from fastapi import Request, Form, HTTPException, Depends, status
+from fastapi import Request, Form, HTTPException, Depends, logger, status
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -31,6 +31,13 @@ async def validate_csrf(request: Request, csrf_token: str = Form(...)):
     """
     Dependencia de FastAPI para validar el token CSRF en formularios POST.
     """
+    # Validar longitud del token para prevenir DoS
+    if not csrf_token or len(csrf_token) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Error de validación CSRF.",
+        )
+
     session = request.state.session
     stored_token = session.get("csrf_token")
 
@@ -38,7 +45,7 @@ async def validate_csrf(request: Request, csrf_token: str = Form(...)):
     if not stored_token or not secrets.compare_digest(stored_token, csrf_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Error de validación CSRF. Intenta recargar la página.",
+            detail="Error de validación CSRF.",
         )
     return True
 

@@ -2,17 +2,17 @@
 import json
 import uuid
 import redis.asyncio as redis
+import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from fastapi.templating import Jinja2Templates
 
-# --- IMPORTACIONES CORREGIDAS ---
 from config import REDIS_URL, SESSION_COOKIE_NAME
-import auth  # Importamos el módulo de autenticación
-from database import AsyncSessionLocal  # <-- ¡NUEVA IMPORTACIÓN!
+import auth
+from database import AsyncSessionLocal
 
-# --------------------------------
+logger = logging.getLogger(__name__)
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -37,8 +37,9 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                     session_data = json.loads(data_json)
                 else:
                     session_id = None
+                    logger.info("Sesión no encontrada en Redis")
             except Exception as e:
-                print(f"Error al leer de Redis: {e}")
+                logger.error(f"Error al leer de Redis: {e}")
                 session_id = None
 
         if not session_id:
@@ -50,11 +51,10 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                     "processed_files": [],
                     "all_rows": [],
                 },
-                "user_id": None,  # ID de nuestro sistema
+                "user_id": None,
                 "is_authenticated": False,
             }
 
-        # --- LÓGICA DE AUTENTICACIÓN MEJORADA ---
         # Poblamos el estado de la request
         request.state.session = session_data
         request.state.session_id = session_id
@@ -64,64 +64,62 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
         request.state.user = None
         request.state.is_authenticated = False
 
-        # Si la sesión dice que el usuario está logueado,
-        # intentamos cargarlo desde nuestra "BD"
+        # Manejar rotación de sesión (login)
+        old_session_id = getattr(request.state, "old_session_id", None)
+        if old_session_id:
+            try:
+                await redis_client.delete(f"session:{old_session_id}")
+            except Exception as e:
+                logger.error(f"Error eliminando sesión anterior: {e}")
+
+        # Si la sesión dice que el usuario está logueado, cargarlo desde BD
         session_user_id = session_data.get("user_id")
         if session_data.get("is_authenticated") and session_user_id:
-
-            # --- INICIO DE LA CORRECCIÓN ---
-            # El middleware debe crear su propia sesión de BD
-            # ya que no puede usar la inyección de dependencias de FastAPI.
             try:
                 async with AsyncSessionLocal() as db_session:
-                    # 1. Llamamos a la función con la sesión
                     user_db_model = await auth.get_user_from_db(
                         db_session, session_user_id
                     )
 
-                    if user_db_model:
-                        # 2. Convertimos el modelo de BD (db_models.User)
-                        # al modelo Pydantic (auth.User) para el request.state
+                    if user_db_model and user_db_model.is_active:
                         request.state.user = auth.User.model_validate(user_db_model)
                         request.state.is_authenticated = True
+                        logger.debug(f"Usuario autenticado: {user_db_model.username}")
                     else:
-                        # El usuario no existe o fue borrado, limpiamos la sesión
+                        # Usuario no existe o inactivo, limpiar sesión
                         session_data["user_id"] = None
                         session_data["is_authenticated"] = False
+                        logger.warning(
+                            f"Usuario inactivo o no encontrado: {session_user_id}"
+                        )
 
             except Exception as e:
-                # Si hay un error de BD, deslogueamos al usuario por seguridad
-                print(
-                    f"Error de BD en middleware al buscar usuario {session_user_id}: {e}"
-                )
+                logger.error(f"Error de BD al buscar usuario {session_user_id}: {e}")
                 session_data["user_id"] = None
                 session_data["is_authenticated"] = False
                 request.state.user = None
                 request.state.is_authenticated = False
-            # --- FIN DE LA CORRECCIÓN ---
 
-        # 3. ¡MOVER LA LÓGICA DE INYECCIÓN GLOBAL AQUÍ!
-        # Esto sucede DESPUÉS de identificar al usuario,
-        # pero ANTES de que se ejecute el endpoint.
+        # Inyección global para templates
         if self.templates:
             self.templates.env.globals["current_user"] = request.state.user
             self.templates.env.globals["is_authenticated"] = (
                 request.state.is_authenticated
             )
-        # ----------------------------------------
 
         response = await call_next(request)
 
-        # Guardamos la sesión en Redis
+        # Guardar sesión en Redis
         if getattr(request.state, "session_cleared", False):
             try:
                 await redis_client.delete(f"session:{session_id}")
+                logger.info(f"Sesión eliminada: {session_id}")
             except Exception as e:
-                print(f"Error borrando la sesión de Redis: {e}")
+                logger.error(f"Error borrando la sesión de Redis: {e}")
             response.delete_cookie(SESSION_COOKIE_NAME)
         else:
             try:
-                # Asegurarnos que la data de usuario no se guarde en la sesión, solo el ID
+                # Sincronizar estado de autenticación
                 if request.state.is_authenticated and request.state.user:
                     request.state.session["user_id"] = request.state.user.id
                     request.state.session["is_authenticated"] = True
@@ -136,7 +134,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                     ex=60 * 60 * 8,  # 8 horas
                 )
             except Exception as e:
-                print(f"Error guardando la sesión en Redis: {e}")
+                logger.error(f"Error guardando la sesión en Redis: {e}")
 
             if new_session:
                 response.set_cookie(
@@ -144,6 +142,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                     value=session_id,
                     httponly=True,
                     samesite="lax",
+                    secure=True,  # ¡IMPORTANTE: Solo sobre HTTPS!
                     max_age=60 * 60 * 8,  # 8 horas
                 )
 

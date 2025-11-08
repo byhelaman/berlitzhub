@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+{% import "macros/icons.html" as icons %}
+{% include "header.html" %}
+
+<div class="admin-container">
+    <h4>Gestión de Usuarios</h4>
+
+    <!-- Mensajes -->
+    {% if request.query_params.get('success') %}
+    <div class="form-message form-message--success">
+        {% if request.query_params.get('success') == 'user_created' %}
+        Usuario creado exitosamente.
+        {% elif request.query_params.get('success') == 'user_deleted' %}
+        Usuario eliminado exitosamente.
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="form-message form-message--error">
+        {{ icons.AlertTriangleIcon(16) }}
+        Error: {{ request.query_params.get('error') }}
+    </div>
+    {% endif %}
+
+    <div class="wrap-box">
+        <!-- Formulario para crear usuario -->
+        <div class="admin-card">
+            <h5 class="admin-card-title">New User
+            </h5>
+            <form method="post" action="/admin/users" class="admin-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="username">Username *</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="full_name">Name *</label>
+                        <input type="text" id="full_name" name="full_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="role">Role *</label>
+                        <select id="role" name="role" required>
+                            <option value="user">Usuario</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn--primary">Crear</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Lista de usuarios -->
+        <div class="admin-card">
+            <h5 class="admin-card-title">List Users</h5>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Linked Zoom</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.full_name }}</td>
+                            <td>
+                                <span class="badge badge--{{ user.role }}">
+                                    {{ user.role }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge--{{ 'active' if user.is_active else 'inactive' }}">
+                                    {{ 'Activo' if user.is_active else 'Inactivo' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if user.zoom_user_id %}
+                                <span class="badge badge--active">Sí</span>
+                                {% else %}
+                                <span class="badge badge--inactive">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.id != current_user.id %}
+                                <form method="post" action="/admin/users/{{ user.id }}/delete" class="inline-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn--danger btn--sm"
+                                        onclick="return confirm('¿Estás seguro de que quieres eliminar a {{ user.username }}?')">
+                                        Eliminar
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span class="text-muted">You</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .wrap-box {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+</style>
+{% endblock %}

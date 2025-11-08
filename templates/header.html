@@ -39,7 +39,7 @@
             {% if is_authenticated and current_user %}
             {{ current_user.full_name }}
             {% else %}
-            Guest User
+            Guest
             {% endif %}
           </span>
         </div>
@@ -48,7 +48,7 @@
             <a href="/" class="user-menu-item">Back to menu</a>
           </li>
           <li>
-            <button id="theme-toggle-btn" class="user-menu-item" type="button">
+            <button id="theme-toggle-btn-menu" class="user-menu-item" type="button">
               <span id="theme-toggle-text">Change theme</span>
             </button>
           </li> -->
@@ -56,6 +56,11 @@
           <li>
             <a href="/profile" class="user-menu-item">Account</a>
           </li>
+          {% if current_user.role == 'admin' %}
+          <li>
+            <a href="/admin/users" class="user-menu-item">Manage Users</a>
+          </li>
+          {% endif %}
           <li>
             <a href="/logout" class="user-menu-item">Log out</a>
           </li>
@@ -69,29 +74,6 @@
     </div>
   </section>
 </header>
-<style>
-  .theme-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .theme-icon--sun {
-    display: none;
-  }
-
-  .theme-icon--moon {
-    display: inline-flex;
-  }
-
-  html.dark .theme-icon--sun {
-    display: inline-flex;
-  }
-
-  html.dark .theme-icon--moon {
-    display: none;
-  }
-</style>
 
 <script>
   (() => {
@@ -102,30 +84,43 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     const themeToggleBtn = document.getElementById("theme-toggle-btn");
+    const themeToggleBtnMenu = document.getElementById("theme-toggle-btn-menu");
     const htmlEl = document.documentElement;
 
     function updateButtonState() {
       if (htmlEl.classList.contains("dark")) {
         themeToggleBtn.setAttribute("aria-label", "Light Mode");
+        if (themeToggleBtnMenu) {
+          document.getElementById("theme-toggle-text").textContent = "Light Mode";
+        }
       } else {
         themeToggleBtn.setAttribute("aria-label", "Dark Mode");
+        if (themeToggleBtnMenu) {
+          document.getElementById("theme-toggle-text").textContent = "Dark Mode";
+        }
       }
+    }
+
+    function toggleTheme() {
+      htmlEl.classList.toggle("dark");
+
+      if (htmlEl.classList.contains("dark")) {
+        localStorage.setItem("theme", "dark");
+      } else {
+        localStorage.setItem("theme", "light");
+      }
+
+      updateButtonState();
     }
 
     updateButtonState();
 
     if (themeToggleBtn) {
-      themeToggleBtn.addEventListener("click", () => {
-        htmlEl.classList.toggle("dark");
+      themeToggleBtn.addEventListener("click", toggleTheme);
+    }
 
-        if (htmlEl.classList.contains("dark")) {
-          localStorage.setItem("theme", "dark");
-        } else {
-          localStorage.setItem("theme", "light");
-        }
-
-        updateButtonState();
-      });
+    if (themeToggleBtnMenu) {
+      themeToggleBtnMenu.addEventListener("click", toggleTheme);
     }
   });
 </script>

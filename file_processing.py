@@ -14,11 +14,13 @@ from config import (
     Schedule,
 )
 
+
 def validate_file(file: UploadFile, content: bytes) -> str | None:
     """
-    Valida la extensión, tipo MIME y tamaño del archivo.
+    Valida la extensión, tipo MIME, tamaño y contenido real del archivo.
     Devuelve un mensaje de error si es inválido, o None si es válido.
     """
+    # Validación básica de extensión y tipo MIME
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         return f"Archivo omitido (extensión inválida): {file.filename}"
@@ -28,14 +30,38 @@ def validate_file(file: UploadFile, content: bytes) -> str | None:
 
     if len(content) > MAX_FILE_SIZE:
         return f"Archivo omitido (excede 5MB): {file.filename}"
-        
+
+    # Validación de magic numbers para detectar tipo real
+    if len(content) >= 8:
+        excel_signatures = [
+            b"\x50\x4b\x03\x04",  # ZIP-based (XLSX, etc.)
+            b"\xd0\xcf\x11\xe0",  # OLE-based (XLS)
+            b"\x09\x08\x10\x00",  # Excel specific
+        ]
+
+        file_signature = content[:8]
+        if not any(file_signature.startswith(sig) for sig in excel_signatures):
+            return f"Archivo omitido (firma de archivo inválida): {file.filename}"
+
+    # Validación de estructura básica
+    try:
+        # Intento de lectura básica para verificar que es un Excel válido
+        test_df = pd.read_excel(
+            pd.io.common.BytesIO(content), nrows=1, engine="openpyxl"
+        )
+        if test_df.empty and len(content) > 1000:  # Archivo "vacío" sospechoso
+            return f"Archivo omitido: {file.filename}"
+    except Exception as e:
+        return f"Archivo omitido: {file.filename}"
+
     return None
+
 
 async def _parse_generated_file(path: str, engine: str) -> List[Schedule]:
     """Parsea un archivo que ya tiene el formato de salida."""
     schedules = []
     df_generated = await asyncio.to_thread(pd.read_excel, path, engine=engine)
-    
+
     for _, row in df_generated.iterrows():
         schedules.append(
             Schedule(
@@ -53,10 +79,12 @@ async def _parse_generated_file(path: str, engine: str) -> List[Schedule]:
         )
     return schedules
 
+
 async def _parse_raw_file(path: str, engine: str) -> List[Schedule]:
     """Parsea un archivo 'raw' usando el parser personalizado."""
     # parse_excel_file debe devolver List[Schedule]
     return await asyncio.to_thread(parse_excel_file, path, engine)
+
 
 async def process_single_file(file: UploadFile, content: bytes) -> List[Schedule]:
     """
@@ -83,7 +111,7 @@ async def process_single_file(file: UploadFile, content: bytes) -> List[Schedule
             schedules = await _parse_generated_file(tmp_file_path, engine)
         else:
             schedules = await _parse_raw_file(tmp_file_path, engine)
-        
+
         return schedules
 
     except Exception as e:

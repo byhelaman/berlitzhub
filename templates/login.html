@@ -5,7 +5,6 @@
 {% include "header.html" %}
 
 <div class="login-container">
-
     <form class="login-form" action="/login" method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
@@ -24,17 +23,19 @@
         {% endif %}
 
 
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" placeholder="jhon.doe" required autofocus />
+        <div style="display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.5rem;">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required />
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" placeholder="••••••••" required />
-        </div>
-
-        <button type="submit" class="btn btn--primary btn--full-width">
+        <button type="submit" class="btn btn--primary">
             <span>Iniciar Sesión</span>
         </button>
     </form>
@@ -43,16 +44,16 @@
 
 <style>
     .login-container {
-        max-width: 400px;
-        margin: 2rem auto;
-        padding: 2rem;
+        max-width: 23rem;
+        /* margin: 2rem auto; */
+        padding: 1.5rem;
         background: var(--color-background-secondary);
-        border-radius: var(--border-radius-md);
+        border-radius: var(--border-radius-lg);
         border: 1px solid var(--color-border);
     }
 
     .login-form {
-        display: flex;
+        /* display: flex; */
         flex-direction: column;
         gap: 1.25rem;
     }
@@ -69,7 +70,7 @@
         color: var(--color-text-primary);
     }
 
-    .form-group input {
+    /* .form-group input {
         padding: 0.75rem;
         border: 1px solid var(--color-border);
         border-radius: var(--border-radius-sm);
@@ -81,12 +82,34 @@
     .form-group input:focus {
         outline: 2px solid var(--color-primary);
         border-color: transparent;
+    } */
+
+    .form-group input {
+        color: var(--color-text-primary);
+        padding: var(--space-xs) var(--space-sm);
+        font-size: var(--font-size-base);
+        border: var(--border-default);
+        border-radius: var(--border-radius-md);
+        background: var(--color-background-light);
+        min-width: 12rem;
+        transition: border-color 0.3s, box-shadow 0.3s;
     }
 
+    .form-group input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px var(--color-primary-shadow);
+    }
+
+    .btn--primary {
+        padding-inline: 1.25rem;
+    }
+
+    /* 
     .btn--full-width {
         width: 100%;
         margin-top: 0.5rem;
-    }
+    } */
 
     .form-error-message {
         display: flex;
@@ -94,10 +117,11 @@
         gap: 0.5rem;
         padding: 0.75rem;
         background-color: var(--color-danger-background);
-        border: 1px solid var(--color-danger-border);
-        color: var(--color-danger-text);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-primary);
         border-radius: var(--border-radius-sm);
         font-size: 0.875rem;
+        margin-bottom: 1.5rem;
     }
 </style>
 

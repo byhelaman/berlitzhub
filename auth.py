@@ -1,66 +1,49 @@
 # auth.py
-# Este módulo simula un sistema de autenticación de usuarios.
-# En una aplicación real, esto interactuaría con tu base de datos de usuarios.
-
+import uuid
 from fastapi import Request, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from typing import Dict, Optional
-from sqlalchemy.ext.asyncio import AsyncSession  # NUEVO
-from sqlalchemy.future import select  # NUEVO
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
-
-# --- NUEVO: Importaciones de DB y Seguridad ---
 from database import get_db
-import db_models  # Importamos nuestros modelos SQL
-import security  # Importamos las funciones de hashing
+import db_models
+import security
 
 
-# --- Modelo de Usuario Simulado ---
+# --- Modelo de Usuario ---
 class User(BaseModel):
     id: str
     username: str
     full_name: str
+    role: str
+    is_active: bool
     zoom_user_id: Optional[str] = None
 
     class Config:
-        from_attributes = True  # Cambiar orm_mode por from_attributes
+        from_attributes = True
 
 
-# --- Base de Datos de Usuarios Falsa ---
-# Simulamos una base de datos de usuarios creados por un admin
-# FAKE_USER_DB: Dict[str, User] = {
-#     "6c94d1ce": User(id="6c94d1ce", username="support", full_name="Support"),
-#     "75989a0a": User(id="75989a0a", username="user", full_name="User"),
-# }
-
-
+# --- Funciones de BD ---
 async def authenticate_user(
     db: AsyncSession, username: str, password: str
-) -> Optional[db_models.User]:  # Devuelve el modelo de la BD
-    """
-    Busca un usuario por username y verifica su contraseña.
-    """
-    # 1. Buscar al usuario por username
-    query = select(db_models.User).where(db_models.User.username == username)
+) -> Optional[db_models.User]:
+    query = select(db_models.User).where(
+        db_models.User.username == username, db_models.User.is_active == True
+    )
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
-        return None  # Usuario no encontrado
+        return None
 
-    # 2. Verificar la contraseña
     if not security.verify_password(password, user.hashed_password):
-        return None  # Contraseña incorrecta
+        return None
 
     return user
 
 
-async def get_user_from_db(
-    db: AsyncSession, user_id: str
-) -> Optional[db_models.User]:  # Devuelve el modelo de la BD
-    """Obtiene un usuario por su ID desde la BD."""
-    # .get() es la forma más rápida de buscar por clave primaria
+async def get_user_from_db(db: AsyncSession, user_id: str) -> Optional[db_models.User]:
     user = await db.get(db_models.User, user_id)
     return user
 
@@ -72,69 +55,92 @@ async def save_zoom_tokens_for_user(
     access_token: str,
     refresh_token: str,
 ):
-    """
-    Guarda los tokens de Zoom para un usuario específico en la BD.
-    """
     user = await db.get(db_models.User, user_id)
     if user:
         user.zoom_user_id = zoom_user_id
         user.zoom_access_token = access_token
         user.zoom_refresh_token = refresh_token
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
-        db.add(user)  # Añade el objeto a la sesión
-        await db.commit()  # Guarda los cambios
-        await db.refresh(user)  # Refresca el objeto
 
-        print(
-            f"Tokens de Zoom guardados para el usuario {user.username} (ID: {user_id})"
+# --- Funciones de gestión de usuarios (para admins) ---
+async def create_user_in_db(
+    db: AsyncSession, username: str, password: str, full_name: str, role: str = "user"
+) -> db_models.User:
+    # Verificar si el usuario ya existe
+    query = select(db_models.User).where(db_models.User.username == username)
+    result = await db.execute(query)
+    existing_user = result.scalar_one_or_none()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El nombre de usuario ya existe.",
         )
-    else:
-        print(f"ERROR: No se pudo encontrar al usuario {user_id} para guardar tokens")
+
+    hashed_password = security.get_password_hash(password)
+    new_user = db_models.User(
+        id=str(uuid.uuid4()),
+        username=username,
+        full_name=full_name,
+        hashed_password=hashed_password,
+        role=role,
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user
 
 
-# --- Dependencia de Seguridad (MODIFICADA) ---
+async def delete_user_from_db(
+    db: AsyncSession, user_id: str, current_user_id: str
+) -> bool:
+    # No permitir auto-eliminación
+    if user_id == current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes eliminar tu propio usuario.",
+        )
+
+    user = await db.get(db_models.User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado.",
+        )
+
+    await db.delete(user)
+    await db.commit()
+    return True
 
 
-# async def get_current_active_user(
-#     request: Request, db: AsyncSession = Depends(get_db)
-# ) -> User:  # Devuelve el modelo Pydantic
-#     """
-#     Dependencia que comprueba la sesión Y carga al usuario desde la BD.
-#     """
-#     if not request.state.is_authenticated or not request.state.user:
-#         raise HTTPException(
-#             status_code=status.HTTP_401_UNAUTHORIZED,
-#             detail="No autenticado. Esta acción requiere iniciar sesión.",
-#         )
-
-#     user_id = request.state.session.get("user_id")
-#     if not user_id:
-#         raise HTTPException(status_code=401, detail="Sesión corrupta.")
-
-#     user_db = await get_user_from_db(db, user_id)
-
-#     if not user_db:
-#         # El usuario existía en la sesión pero fue borrado de la BD
-#         request.state.session["user_id"] = None
-#         request.state.session["is_authenticated"] = False
-#         raise HTTPException(status_code=401, detail="Usuario no encontrado.")
-
-#     # Convertimos el modelo de BD (db_models.User)
-#     # al modelo Pydantic (auth.User)
-#     return User.from_orm(user_db)
+async def get_all_users_from_db(db: AsyncSession) -> list[db_models.User]:
+    query = select(db_models.User).order_by(db_models.User.username)
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
-async def get_current_active_user(
-    request: Request,
-) -> User:  # <-- Pista de tipo corregida a auth.User
-    """
-    Dependencia que obtiene al usuario activo desde el estado
-    (poblado por el middleware).
-    """
+# --- Dependencias de Autenticación ---
+async def get_current_active_user(request: Request) -> User:
+    """Obtiene el usuario actual desde el estado de la request"""
     if not request.state.is_authenticated or not request.state.user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autenticado. Esta acción requiere iniciar sesión.",
         )
-
     return request.state.user
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """Verifica que el usuario actual sea administrador"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador.",
+        )
+    return current_user
