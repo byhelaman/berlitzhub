@@ -33,3 +33,4 @@ asyncpg
 alembic
 aiosqlite
 httpx
+psycopg[binary]
