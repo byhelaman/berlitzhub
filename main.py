@@ -411,7 +411,9 @@ async def show_upload_form(request: Request):
 async def delete_selected_rows(
     request: Request,
     selected_ids: str = Form(...),
-    is_csrf_valid: bool = Depends(security.validate_csrf),
+    # Cambiamos 'is_csrf_valid' por 'new_csrf_token' para más claridad
+    # El valor de 'new_csrf_token' será el nuevo token generado
+    new_csrf_token: str = Depends(security.validate_csrf),
 ):
     # Validar y filtrar UUIDs
     ids_to_delete = security.validate_uuid_list(selected_ids)
@@ -438,13 +440,22 @@ async def delete_selected_rows(
     schedule_data["all_rows"] = all_rows
     request.state.session["schedule_data"] = schedule_data
 
-    return JSONResponse({"success": True, "message": f"Deleted {deleted_count} rows."})
+    # ¡LA CORRECCIÓN!
+    # Devolver el nuevo token en la respuesta JSON
+    return JSONResponse(
+        {
+            "success": True,
+            "message": f"Deleted {deleted_count} rows.",
+            "new_csrf_token": new_csrf_token,
+        }
+    )
 
 
 @app.post("/restore-rows", response_class=JSONResponse)
 @security.limiter.limit("30/minute")
 async def restore_deleted_rows(
-    request: Request, is_csrf_valid: bool = Depends(security.validate_csrf)
+    request: Request,
+    new_csrf_token: str = Depends(security.validate_csrf),  # Aplicar cambio
 ):
     schedule_data = request.state.session.get(
         "schedule_data", schedule_service.get_empty_schedule_data()
@@ -460,20 +471,32 @@ async def restore_deleted_rows(
     schedule_data["all_rows"] = all_rows
     request.state.session["schedule_data"] = schedule_data
 
+    # ¡LA CORRECCIÓN!
     return JSONResponse(
-        {"success": True, "message": f"Restored {restored_count} rows."}
+        {
+            "success": True,
+            "message": f"Restored {restored_count} rows.",
+            "new_csrf_token": new_csrf_token,  # Devolver nuevo token
+        }
     )
 
 
 @app.post("/delete-data", response_class=JSONResponse)
 @security.limiter.limit("10/minute")
 async def delete_data(
-    request: Request, is_csrf_valid: bool = Depends(security.validate_csrf)
+    request: Request,
+    new_csrf_token: str = Depends(security.validate_csrf),  # Aplicar cambio
 ):
     # Usar el servicio para obtener un estado vacío
     request.state.session["schedule_data"] = schedule_service.get_empty_schedule_data()
-    # request.state.session_cleared = True
-    return JSONResponse({"success": True, "message": "All data cleared."})
+
+    return JSONResponse(
+        {
+            "success": True,
+            "message": "All data cleared.",
+            "new_csrf_token": new_csrf_token,  # Devolver nuevo token
+        }
+    )
 
 
 @app.get("/schedule")

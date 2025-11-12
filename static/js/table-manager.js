@@ -14,7 +14,7 @@ const manager = (function () {
     selectAllCheckbox,
     deleteBtn,
     downloadBtn,
-    copySelectedAction,
+    // copySelectedAction,
     copyScheduleAction;
   let copyInstructorsAction,
     selectedCountEl,
@@ -27,7 +27,8 @@ const manager = (function () {
   let columnsConfig = [];
   let rowsData = [];
   let sortCriteria = [];
-  let rightClickedRow = null;
+  // let rightClickedRow = null;
+  let lastClickedRowIndex = -1;
 
   function sortData() {
     if (sortCriteria.length === 0) return;
@@ -108,9 +109,9 @@ const manager = (function () {
       deleteBtn.disabled = totalSelectedCount === 0;
     }
 
-    if (copySelectedAction) {
-      copySelectedAction.disabled = totalSelectedCount === 0;
-    }
+    // if (copySelectedAction) {
+    //   copySelectedAction.disabled = totalSelectedCount === 0;
+    // }
 
     const visibleItems = rowsData.filter((it) => it.visible);
     const selectedVisibleCount = visibleItems.filter(
@@ -259,21 +260,78 @@ const manager = (function () {
     render();
   }
 
+  // function handleRowClick(e) {
+  //   const tr = e.target.closest("tr");
+  //   if (!tr) return;
+
+  //   const item = rowsData.find((it) => it.row === tr);
+  //   if (!item) return;
+
+  //   const cb = tr.querySelector(".row-select");
+  //   if (e.target !== cb) {
+  //     cb.checked = !cb.checked;
+  //   }
+
+  //   toggleRowSelection(item, cb.checked);
+  //   updateSelectedCount();
+  // }
+
   function handleRowClick(e) {
     const tr = e.target.closest("tr");
     if (!tr) return;
 
-    const item = rowsData.find((it) => it.row === tr);
+    // Encontrar el índice del item clickeado en lugar del item mismo
+    const currentItemIndex = rowsData.findIndex((it) => it.row === tr);
+    if (currentItemIndex === -1) return;
+
+    const item = rowsData[currentItemIndex];
     if (!item) return;
 
     const cb = tr.querySelector(".row-select");
+
+    // Determinar el nuevo estado de selección
+    // Si se hizo clic en el checkbox, cb.checked ya es el nuevo estado.
+    // Si se hizo clic en la fila, se debe invertir el estado actual.
+    let newSelectionState = cb.checked;
     if (e.target !== cb) {
-      cb.checked = !cb.checked;
+      newSelectionState = !cb.checked;
+      cb.checked = newSelectionState; // Sincronizar el checkbox
     }
 
-    toggleRowSelection(item, cb.checked);
+    // --- INICIO DE LÓGICA SHIFT-CLICK ---
+    if (
+      e.shiftKey &&
+      lastClickedRowIndex > -1 &&
+      lastClickedRowIndex !== currentItemIndex
+    ) {
+      // Prevenir la selección de texto del navegador al usar Shift
+      e.preventDefault();
+
+      // Encontrar el inicio y el fin del rango
+      const start = Math.min(lastClickedRowIndex, currentItemIndex);
+      const end = Math.max(lastClickedRowIndex, currentItemIndex);
+
+      // Aplicar el estado de selección a todo el rango
+      for (let i = start; i <= end; i++) {
+        const rowItem = rowsData[i];
+        // Solo afectar a las filas visibles (coherente con "Select All")
+        if (rowItem.visible) {
+          toggleRowSelection(rowItem, newSelectionState);
+        }
+      }
+    } else {
+      // --- LÓGICA DE CLICK NORMAL ---
+      toggleRowSelection(item, newSelectionState);
+    }
+    // --- FIN DE LÓGICA SHIFT-CLICK ---
+
+    // Actualizar el último índice clickeado
+    lastClickedRowIndex = currentItemIndex;
+
+    // Actualizar los contadores
     updateSelectedCount();
   }
+
 
   async function handleFormSubmit(form, confirmMessage, successCallback) {
     if (confirmMessage && !confirm(confirmMessage)) {
@@ -310,11 +368,21 @@ const manager = (function () {
       }
 
       const result = await response.json();
-      if (result.success) {
-        successCallback(result);
-      } else {
-        throw new Error(result.message || "Unknown error from server");
+
+      if (result.new_csrf_token) {
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+          input.value = result.new_csrf_token;
+        });
+
+        csrfToken = result.new_csrf_token;
       }
+      successCallback(result);
+
+      // if (result.success) {
+      //   successCallback(result);
+      // } else {
+      //   throw new Error(result.message || "Unknown error from server");
+      // }
     } catch (err) {
       console.error("Fetch error:", err);
       alert(`An error occurred: ${err.message}. Please try again.`);
@@ -322,6 +390,45 @@ const manager = (function () {
       if (submitBtn) {
         submitBtn.disabled = false;
       }
+    }
+  }
+
+  function copySelectedRowsToClipboard() {
+    const selectedItems = rowsData.filter((it) => it.selected);
+    if (selectedItems.length === 0) {
+      alert("No rows selected to copy.");
+      return;
+    }
+
+    try {
+      // Esta lógica se basa en tu antigua acción "Copy row"
+      const textToCopy = selectedItems
+        .map((item) => {
+          const date = item.data["Date"];
+          const groupName = item.data["Group"];
+          const startTime24h = utils.convertTo24HourFormat(
+            item.data["Start Time"]
+          );
+          const endTime24h = utils.convertTo24HourFormat(
+            item.data["End Time"]
+          );
+          return `${date}\n${groupName}\n${startTime24h} - ${endTime24h}`;
+        })
+        .join("\n\n"); // Separa cada fila copiada con un doble salto de línea
+
+      navigator.clipboard
+        .writeText(textToCopy)
+        .then(() => {
+          const s = selectedItems.length > 1 ? "s" : "";
+          alert(`Copied ${selectedItems.length} row${s}`);
+        })
+        .catch((err) => {
+          console.error("Error copying selected rows: ", err);
+          alert("Error: Could not copy selected rows.");
+        });
+    } catch (err) {
+      console.error("Error during copy formatting:", err);
+      alert("Error: Could not format data for copying.");
     }
   }
 
@@ -349,6 +456,10 @@ const manager = (function () {
       }, 0);
     });
 
+    // copySelectedAction?.addEventListener("click", () => {
+    //   copySelectedRowsToClipboard();
+    // });
+
     selectAllCheckbox.addEventListener("change", (e) => {
       rowsData.forEach((item) => {
         if (item.visible) toggleRowSelection(item, e.target.checked);
@@ -363,6 +474,12 @@ const manager = (function () {
     tbody.addEventListener("mouseout", (e) =>
       e.target.closest("tr")?.classList.remove("hover-row")
     );
+
+    tbody.addEventListener('mousedown', (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+      }
+    });
 
     deleteForm?.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -420,37 +537,37 @@ const manager = (function () {
       window.location.href = "/download-excel";
     });
 
-    copySelectedAction?.addEventListener("click", () => {
-      const selectedItems = rowsData.filter((it) => it.selected);
-      if (selectedItems.length === 0) return;
+    // copySelectedAction?.addEventListener("click", () => {
+    //   const selectedItems = rowsData.filter((it) => it.selected);
+    //   if (selectedItems.length === 0) return;
 
-      const dateIdx = columnsConfig.find((c) => c.label === "Date").index;
-      const groupIdx = columnsConfig.find((c) => c.label === "Group").index;
-      const startIdx = columnsConfig.find(
-        (c) => c.label === "Start Time"
-      ).index;
-      const endIdx = columnsConfig.find((c) => c.label === "End Time").index;
+    //   const dateIdx = columnsConfig.find((c) => c.label === "Date").index;
+    //   const groupIdx = columnsConfig.find((c) => c.label === "Group").index;
+    //   const startIdx = columnsConfig.find(
+    //     (c) => c.label === "Start Time"
+    //   ).index;
+    //   const endIdx = columnsConfig.find((c) => c.label === "End Time").index;
 
-      const textToCopy = selectedItems
-        .map((item) => {
-          const date = item.row.cells[dateIdx].textContent;
-          const group = item.row.cells[groupIdx].textContent;
-          const start = item.row.cells[startIdx].textContent;
-          const end = item.row.cells[endIdx].textContent;
-          return `${date}\n${group}\n${start} - ${end}`;
-        })
-        .join("\n\n");
+    //   const textToCopy = selectedItems
+    //     .map((item) => {
+    //       const date = item.row.cells[dateIdx].textContent;
+    //       const group = item.row.cells[groupIdx].textContent;
+    //       const start = item.row.cells[startIdx].textContent;
+    //       const end = item.row.cells[endIdx].textContent;
+    //       return `${date}\n${group}\n${start} - ${end}`;
+    //     })
+    //     .join("\n\n");
 
-      navigator.clipboard
-        .writeText(textToCopy)
-        .then(() => {
-          alert(`Copied ${selectedItems.length} row(s)`);
-        })
-        .catch((err) => {
-          console.error("Error copying selected rows: ", err);
-          alert("Error: Could not copy selected rows.");
-        });
-    });
+    //   navigator.clipboard
+    //     .writeText(textToCopy)
+    //     .then(() => {
+    //       alert(`Copied ${selectedItems.length} row(s)`);
+    //     })
+    //     .catch((err) => {
+    //       console.error("Error copying selected rows: ", err);
+    //       alert("Error: Could not copy selected rows.");
+    //     });
+    // });
 
     copyScheduleAction?.addEventListener("click", () => {
       fetch("/schedule", { method: "GET" })
@@ -492,7 +609,36 @@ const manager = (function () {
       const tr = e.target.closest("tr");
       if (!tr || tr.id === "noDataRow") return;
 
-      rightClickedRow = tr;
+      const item = rowsData.find((it) => it.row === tr);
+      if (!item) return;
+
+      // Si la fila clickeada NO está seleccionada,
+      // deselecciona todo y selecciona solo esta fila.
+      if (!item.selected) {
+        // Deselecciona todas
+        rowsData.forEach((it) => {
+          if (it.selected) toggleRowSelection(it, false);
+        });
+        // Selecciona solo la actual
+        toggleRowSelection(item, true);
+
+        // Actualiza el contador
+        updateSelectedCount();
+
+        // Actualiza el índice del último clic para consistencia con Shift-Clic
+        lastClickedRowIndex = rowsData.findIndex(it => it.row === tr);
+      }
+
+      // Ahora, cuenta el total de filas seleccionadas
+      const totalSelected = rowsData.filter((it) => it.selected).length;
+
+      // Actualiza el texto del botón del menú contextual
+      if (copyRowAction) {
+        copyRowAction.textContent =
+          totalSelected > 1 ? "Copy rows" : "Copy row";
+      }
+
+      // rightClickedRow = tr;
       contextMenu.style.top = `${e.pageY}px`;
       contextMenu.style.left = `${e.pageX}px`;
       contextMenu.style.display = "block";
@@ -503,29 +649,33 @@ const manager = (function () {
         contextMenu.style.display = "none";
     });
 
+    // copyRowAction?.addEventListener("click", () => {
+    //   if (!rightClickedRow) return;
+
+    //   try {
+    //     const item = rowsData.find((it) => it.row === rightClickedRow);
+    //     if (!item) return;
+
+    //     const date = item.data["Date"];
+    //     const groupName = item.data["Group"];
+    //     const startTime24h = utils.convertTo24HourFormat(
+    //       item.data["Start Time"]
+    //     );
+    //     const endTime24h = utils.convertTo24HourFormat(item.data["End Time"]);
+
+    //     const formattedText = `${date}\n${groupName}\n${startTime24h} - ${endTime24h}`;
+
+    //     navigator.clipboard
+    //       .writeText(formattedText)
+    //       .then(() => console.log("Row copied successfully"))
+    //       .catch((err) => console.error("Error copying row: ", err));
+    //   } catch (err) {
+    //     console.error("Error al copiar fila (revisar 'item.data'):", err);
+    //   }
+    // });
+
     copyRowAction?.addEventListener("click", () => {
-      if (!rightClickedRow) return;
-
-      try {
-        const item = rowsData.find((it) => it.row === rightClickedRow);
-        if (!item) return;
-
-        const date = item.data["Date"];
-        const groupName = item.data["Group"];
-        const startTime24h = utils.convertTo24HourFormat(
-          item.data["Start Time"]
-        );
-        const endTime24h = utils.convertTo24HourFormat(item.data["End Time"]);
-
-        const formattedText = `${date}\n${groupName}\n${startTime24h} - ${endTime24h}`;
-
-        navigator.clipboard
-          .writeText(formattedText)
-          .then(() => console.log("Row copied successfully"))
-          .catch((err) => console.error("Error copying row: ", err));
-      } catch (err) {
-        console.error("Error al copiar fila (revisar 'item.data'):", err);
-      }
+      copySelectedRowsToClipboard();
     });
 
     deselectAllAction?.addEventListener("click", () => {
@@ -579,7 +729,7 @@ const manager = (function () {
     downloadBtn = document.querySelector(
       'button[aria-label="Download as Excel"]'
     );
-    copySelectedAction = document.getElementById("copy-selected-action");
+    // copySelectedAction = document.getElementById("copy-selected-action");
     copyScheduleAction = document.getElementById("copy-schedule-action");
     copyInstructorsAction = document.getElementById("copy-instructors-action");
     selectedCountEl = document.getElementById("stat-selected");

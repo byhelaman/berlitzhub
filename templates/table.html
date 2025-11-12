@@ -27,22 +27,19 @@
     </div>
 
     <div class="toolbar-actions">
-      <!-- <button type="button" class="btn btn--icon" aria-label="Copy">
-        {{ icons.CopyIcon(14) }}
-      </button> -->
 
       <div class="dropdown-container">
-        <button type="button" class="btn btn--icon" id="copy-menu-btn" aria-label="Copy options" aria-haspopup="true"
+        <button type="button" class="btn btn--icon" id="copy-menu-btn" aria-label="Actions" aria-haspopup="true"
           aria-expanded="false">
-          {{ icons.CopyIcon(14) }}
+          {{ icons.SettingsIcon(14) }}
         </button>
         <div id="copy-menu" class="dropdown-menu">
           <ul class="dropdown-menu-list">
-            <li>
+            <!-- <li>
               <button type="button" id="copy-selected-action" class="dropdown-menu-item" disabled>
                 Copy selected rows
               </button>
-            </li>
+            </li> -->
             <li>
               <button type="button" id="copy-schedule-action" class="dropdown-menu-item">
                 Copy schedule
@@ -59,7 +56,7 @@
 
       <span class="split"></span>
       <div class="wrap-toolbar-actions">
-        {% if is_admin %}
+        {% if is_authenticated and current_user %}
         <button type="button" class="btn btn--icon" aria-label="AutoAssign" disabled>
           {{ icons.BotIcon(16) }}
         </button>
