@@ -151,8 +151,10 @@ const manager = (function () {
   function _calculateAllOverlaps() {
     rowsData.forEach((item) => (item.overlapped = false));
 
+    const activeRows = rowsData.filter(it => it.status === 'active');
+
     const byInstructor = {};
-    rowsData.forEach((it) => {
+    activeRows.forEach((it) => {
       const key = it.data["Instructor"] || "__NO_INSTRUCTOR__";
       (byInstructor[key] = byInstructor[key] || []).push(it);
     });
@@ -175,7 +177,7 @@ const manager = (function () {
     });
 
     const byGroupAndTime = {};
-    rowsData.forEach((it) => {
+    activeRows.forEach((it) => {
       const key = `${it.data["Group"]}_${it.data["Start Time"]}_${it.data["End Time"]}`;
       (byGroupAndTime[key] = byGroupAndTime[key] || []).push(it);
     });
