@@ -265,62 +265,104 @@ async def zoom_auth_start(
     return RedirectResponse(url=auth_url)
 
 
+@app.post("/auth/zoom/unlink", response_class=RedirectResponse)
+async def zoom_unlink(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(auth.get_current_active_user),
+    is_csrf_valid: bool = Depends(security.validate_csrf),  # Validación CSRF importante
+):
+    """
+    Elimina los tokens de Zoom del usuario actual.
+    """
+    # Nota: Necesitarás agregar esta función 'remove_zoom_tokens_for_user' en tu archivo auth.py
+    # Si no la tienes, te dejo un ejemplo de cómo sería abajo en la explicación.
+    await auth.remove_zoom_tokens_for_user(db, current_user.id)
+
+    return RedirectResponse(url="/profile?success=zoom_unlinked", status_code=303)
+
+
+# 2. MODIFICAR el callback existente
 @app.get("/auth/zoom/callback")
 async def zoom_auth_callback(
     request: Request,
     code: str,
     db: AsyncSession = Depends(get_db),
-    # Zoom nos devuelve esto en la URL
-    # No podemos usar 'get_current_active_user' porque la sesión
-    # puede ser distinta (viene de un redirect).
-    # Confiamos en la sesión del middleware.
 ):
     """
-    Paso 2: Callback de Zoom.
-    El usuario es redirigido aquí después de autorizar en Zoom.
+    Callback modificado para manejar el cierre del popup.
     """
-
-    # Verificamos que el usuario esté logueado en nuestra app
+    # Verificamos autenticación (igual que antes)
     if not request.state.is_authenticated or not request.state.user:
-        # Es un invitado o sesión expirada
         return RedirectResponse(url="/login?error=zoom_auth_failed", status_code=303)
 
     current_user = request.state.user
-
-    # 1. Recuperar el verifier que guardamos en la sesión
     code_verifier = request.state.session.pop("zoom_code_verifier", None)
 
     if not code_verifier:
-        # Esto pasa si la sesión expiró o hay un intento malicioso
-        return RedirectResponse(
-            url="/profile?error=zoom_session_expired", status_code=303
+        # Si falla, cerramos el popup y recargamos la principal con error
+        return HTMLResponse(
+            """
+            <script>
+                if (window.opener) {
+                    window.opener.location.href = '/profile?error=zoom_session_expired';
+                    window.close();
+                } else {
+                    window.location.href = '/profile?error=zoom_session_expired';
+                }
+            </script>
+            """
         )
 
     try:
-        # Paso 3: Intercambiar el código por tokens
         token_data = await zoom_oauth.exchange_code_for_tokens(code, code_verifier)
-
         access_token = token_data["access_token"]
         refresh_token = token_data["refresh_token"]
 
-        # Paso 4: Obtener el ID de usuario de Zoom
         zoom_user_info = await zoom_oauth.get_zoom_user_info(access_token)
         zoom_user_id = zoom_user_info["id"]
 
-        # ¡MODIFICADO: Guardar en la BD!
         await auth.save_zoom_tokens_for_user(
-            db=db,  # ¡Pasar la sesión de la BD!
+            db=db,
             user_id=current_user.id,
             zoom_user_id=zoom_user_id,
             access_token=access_token,
             refresh_token=refresh_token,
         )
 
+        # --- CAMBIO CRÍTICO AQUÍ ---
+        # No redirigimos con RedirectResponse. Devolvemos un script JS.
+        # Esto actualiza la ventana PADRE (opener) y cierra el POPUP.
+        return HTMLResponse(
+            """
+            <script>
+                if (window.opener) {
+                    // Recargar la ventana principal con el mensaje de éxito
+                    window.opener.location.href = '/profile?success=zoom_linked';
+                    // Cerrar este popup
+                    window.close();
+                } else {
+                    // Fallback por si el usuario abrió el link directo sin popup
+                    window.location.href = '/profile?success=zoom_linked';
+                }
+            </script>
+            """
+        )
+
     except Exception as e:
         print(f"Error en el callback de Zoom: {e}")
-        return RedirectResponse(url="/profile?error=zoom_link_failed", status_code=303)
-
-    return RedirectResponse(url="/profile?success=zoom_linked", status_code=303)
+        return HTMLResponse(
+            """
+            <script>
+                if (window.opener) {
+                    window.opener.location.href = '/profile?error=zoom_link_failed';
+                    window.close();
+                } else {
+                    window.location.href = '/profile?error=zoom_link_failed';
+                }
+            </script>
+            """
+        )
 
 
 # --- Endpoints de la Aplicación (Sin cambios, ahora conscientes del auth) ---
@@ -366,14 +408,6 @@ async def read_schedule(request: Request):
             "upload_errors": upload_errors,
         },
     )
-
-
-# ... (El resto de tus endpoints: /generate-schedule POST, /upload-new, etc.
-#      NO necesitan cambios, ya que todos operan sobre
-#      request.state.session["schedule_data"], lo cual funciona
-#      perfectamente tanto para invitados como para usuarios logueados.)
-
-# ... (Pegar aquí el resto de endpoints de main.py sin modificar)
 
 
 @app.post("/generate-schedule", response_class=RedirectResponse)

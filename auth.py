@@ -196,3 +196,26 @@ async def get_current_admin_user(
             detail="Se requieren permisos de administrador.",
         )
     return current_user
+
+
+async def remove_zoom_tokens_for_user(db: AsyncSession, user_id: str):
+    """
+    Elimina los tokens de Zoom y el zoom_user_id del usuario.
+    """
+    # Buscamos al usuario por su ID (igual que en save_zoom_tokens_for_user)
+    user = await db.get(db_models.User, user_id)
+
+    if user:
+        # Establecemos los campos de Zoom a None (NULL en la base de datos)
+        user.zoom_user_id = None
+        user.zoom_access_token = None
+        user.zoom_refresh_token = None
+
+        # Si tienes un campo 'zoom_token_expires_at' en db_models.py,
+        # descomenta la siguiente línea:
+        # user.zoom_token_expires_at = None
+
+        # Guardamos los cambios
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)

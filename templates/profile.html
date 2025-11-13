@@ -5,18 +5,24 @@
 
 <div class="profile-container">
 
-    <h4 class="mb-3">Perfil de Usuario</h4>
+    <h4 class="mb-3">User profile</h4>
 
     {% if request.query_params.get('success') == 'zoom_linked' %}
     <div class="form-message form-message--success mb-3">
-        ¡Cuenta de Zoom vinculada correctamente!
+        Zoom account linked successfully!
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('success') == 'zoom_unlinked' %}
+    <div class="form-message form-message--success mb-3">
+        Zoom account unlinked successfully!
     </div>
     {% endif %}
 
     {% if request.query_params.get('error') == 'zoom_link_failed' %}
     <div class="form-message form-message--error">
         {{ icons.AlertTriangleIcon(16) }}
-        No se pudo vincular la cuenta de Zoom. Inténtalo de nuevo.
+        Zoom account linking failed. Please try again.
     </div>
     {% endif %}
 
@@ -41,19 +47,27 @@
             <h5 class="profile-card-title">API connections</h5>
             <div class="zoom-linking-section">
                 <div class="zoom-info">
-                    <span class="zoom-icon"></span>
+                    <!-- <span class="zoom-icon"></span> -->
                     <span>Zoom API</span>
                 </div>
                 {% if is_zoom_linked %}
-                <div class="link-status link-status--linked">
+                <div class="link-status link-status--linked mb-3">
                     <span>Linked Account</span>
-                    <span>***{{ user.zoom_user_id[-6:] }}</span>
+                    <span class="text-muted text-sm">ID: ***{{ user.zoom_user_id[-6:] }}</span>
                 </div>
+
+                <form action="/auth/zoom/unlink" method="POST"
+                    onsubmit="return confirm('Are you sure you want to unlink your Zoom account?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn--danger btn--sm w-full">
+                        Unlink Account
+                    </button>
+                </form>
                 {% else %}
-                <div class="link-status link-status--unlinked">
+                <div class="link-status link-status--unlinked mb-3">
                     <span>Not Linked</span>
                 </div>
-                <button class="btn btn--primary" id="zoom-auth-btn">
+                <button class="btn btn--primary w-full" id="zoom-auth-btn">
                     <span>Link Zoom Account</span>
                 </button>
                 {% endif %}
@@ -69,18 +83,37 @@
     </div>
 </div>
 <script>
-    document.getElementById('zoom-auth-btn').addEventListener('click', function () {
-        const width = 600;
-        const height = 600;
-        const left = (window.innerWidth - width) / 2;
-        const top = (window.innerHeight - height) / 2;
+    const zoomBtn = document.getElementById('zoom-auth-btn');
+    if (zoomBtn) {
+        zoomBtn.addEventListener('click', function (e) {
+            e.preventDefault();
 
-        window.open(
-            '/auth/zoom',
-            'zoomAuth',
-            `width=${width},height=${height},left=${left},top=${top}`
-        );
-    });
+            const width = 600;
+            const height = 700;
+
+            // Calcular posición centrada dual-monitor safe
+            const screenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+            const screenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+
+            const innerWidth = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+            const innerHeight = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+
+            const left = screenLeft + (innerWidth / 2) - (width / 2);
+            const top = screenTop + (innerHeight / 2) - (height / 2);
+
+            // Abrir popup
+            const popup = window.open(
+                '/auth/zoom',
+                'ZoomAuthPopup',
+                `scrollbars=yes, width=${width}, height=${height}, top=${top}, left=${left}`
+            );
+
+            // Enfocar el popup por si acaso el navegador lo manda al fondo
+            if (window.focus && popup) {
+                popup.focus();
+            }
+        });
+    }
 </script>
 
 {% endblock %}
