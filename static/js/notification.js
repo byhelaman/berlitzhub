@@ -26,19 +26,29 @@ class NotificationManager {
 
     /**
      * Muestra una notificación
-     * @param {string} message - Mensaje a mostrar
+     * @param {string|Object} messageOrConfig - Mensaje a mostrar o objeto con {title, message}
      * @param {string} type - Tipo: 'success', 'error', 'warning', 'info'
      * @param {Object} options - Opciones adicionales
      * @param {number} options.duration - Duración en ms (0 = no auto-cerrar)
      * @param {boolean} options.dismissible - Si se puede cerrar manualmente
      */
-    show(message, type = "info", options = {}) {
+    show(messageOrConfig, type = "info", options = {}) {
         const {
             duration = this.defaultDuration,
             dismissible = true,
         } = options;
 
-        const notification = this.createNotification(message, type, dismissible);
+        // Soporte para formato antiguo (solo mensaje) y nuevo (objeto con title/message)
+        let title, message;
+        if (typeof messageOrConfig === "string") {
+            title = messageOrConfig;
+            message = null;
+        } else {
+            title = messageOrConfig.title || messageOrConfig.message;
+            message = messageOrConfig.message || null;
+        }
+
+        const notification = this.createNotification(title, message, type, dismissible);
         this.container.appendChild(notification);
 
         // Animar entrada
@@ -60,7 +70,7 @@ class NotificationManager {
         return notificationId;
     }
 
-    createNotification(message, type, dismissible) {
+    createNotification(title, description, type, dismissible) {
         const notification = document.createElement("div");
         notification.className = `notification notification--${type}`;
         notification.setAttribute("role", "alert");
@@ -68,13 +78,38 @@ class NotificationManager {
         // Icono según el tipo
         const icon = this.getIcon(type);
 
-        // Contenido
+        // Contenido principal
         const content = document.createElement("div");
         content.className = "notification__content";
-        content.innerHTML = `
-      <span class="notification__icon">${icon}</span>
-      <span class="notification__message">${this.escapeHtml(message)}</span>
-    `;
+
+        // Header con icono y título
+        const header = document.createElement("div");
+        header.className = "notification__header";
+        
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "notification__icon";
+        iconSpan.innerHTML = icon;
+        
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "notification__title";
+        titleSpan.textContent = title;
+        
+        header.appendChild(iconSpan);
+        header.appendChild(titleSpan);
+        content.appendChild(header);
+
+        // Descripción si existe
+        if (description) {
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "notification__message";
+            // Permitir HTML en la descripción para soportar listas
+            if (description.includes("<ul>") || description.includes("<li>")) {
+                messageDiv.innerHTML = description;
+            } else {
+                messageDiv.textContent = description;
+            }
+            content.appendChild(messageDiv);
+        }
 
         notification.appendChild(content);
 
@@ -137,20 +172,20 @@ class NotificationManager {
     }
 
     // Métodos de conveniencia
-    success(message, options = {}) {
-        return this.show(message, "success", options);
+    success(messageOrConfig, options = {}) {
+        return this.show(messageOrConfig, "success", options);
     }
 
-    error(message, options = {}) {
-        return this.show(message, "error", options);
+    error(messageOrConfig, options = {}) {
+        return this.show(messageOrConfig, "error", options);
     }
 
-    warning(message, options = {}) {
-        return this.show(message, "warning", options);
+    warning(messageOrConfig, options = {}) {
+        return this.show(messageOrConfig, "warning", options);
     }
 
-    info(message, options = {}) {
-        return this.show(message, "info", options);
+    info(messageOrConfig, options = {}) {
+        return this.show(messageOrConfig, "info", options);
     }
 }
 
