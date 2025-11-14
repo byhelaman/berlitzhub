@@ -131,7 +131,7 @@ a {
     border: var(--border-default);
     border-radius: var(--border-radius-md);
     cursor: pointer;
-    transition: var(--transition-default);
+    /* transition: var(--transition-default); */
     background: var(--color-background-grey-light);
     color: var(--color-text-primary);
     white-space: nowrap;
@@ -251,7 +251,7 @@ a {
     z-index: 50;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
+    /* transition: opacity 0.2s ease, visibility 0.2s ease; */
 }
 
 .btn--icon:hover::after,
@@ -463,7 +463,7 @@ a {
     border: var(--border-default);
     border-radius: var(--border-radius-lg);
     background: var(--color-background-grey-light);
-    transition: var(--transition-default);
+    /* transition: var(--transition-default); */
     cursor: pointer;
     user-select: none;
     color: var(--color-text-primary);
@@ -472,7 +472,7 @@ a {
 .feature-card:hover {
     background: var(--color-primary);
     color: var(--color-text-on-primary);
-    transform: translateY(-5px);
+    /* transform: translateY(-5px); */
     box-shadow: var(--box-shadow-card-hover);
     border-color: var(--color-primary);
 }
@@ -527,7 +527,7 @@ a {
     border: var(--border-default);
     border-radius: var(--border-radius-md);
     background: var(--color-background-light);
-    transition: border-color 0.3s, box-shadow 0.3s;
+    /* transition: border-color 0.3s, box-shadow 0.3s; */
 }
 
 .form-group input:focus,
@@ -614,7 +614,7 @@ a {
     border-radius: var(--border-radius-lg);
     color: var(--color-text-upload);
     cursor: pointer;
-    transition: var(--transition-default);
+    /* transition: var(--transition-default); */
     user-select: none;
 }
 
@@ -699,7 +699,7 @@ a {
     padding: var(--space-xs);
     border-radius: var(--border-radius-md);
     cursor: pointer;
-    transition: var(--transition-default);
+    /* transition: var(--transition-default); */
     flex-shrink: 0;
     color: var(--color-text-primary);
 }
@@ -784,7 +784,7 @@ a {
     border-radius: var(--border-radius-md);
     background: var(--color-background-light);
     min-width: 12rem;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    /* transition: border-color 0.3s, box-shadow 0.3s; */
 }
 
 .filter-group input[type="search"]:focus {
@@ -1404,7 +1404,7 @@ a {
     font-size: var(--font-size-base);
     color: var(--color-text-primary);
     opacity: 0.6;
-    transition: opacity 0.3s;
+    /* transition: opacity 0.3s; */
 }
 
 .social-item a:hover {

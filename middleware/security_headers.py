@@ -29,4 +29,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'; "
             "frame-ancestors 'none';"
         )
+        
+        # OPTIMIZACIÓN: Agregar headers de cache para archivos estáticos
+        # Esto mejora significativamente los tiempos de carga en visitas subsecuentes
+        path = request.url.path
+        if path.startswith("/static/"):
+            # Determinar el tipo de archivo basado en la extensión
+            static_extensions = [".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", 
+                               ".woff", ".woff2", ".ttf", ".eot", ".ico"]
+            if any(path.endswith(ext) for ext in static_extensions):
+                # Archivos estáticos: cache por 1 hora, revalidar después
+                response.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
+                response.headers["Vary"] = "Accept-Encoding"
+            else:
+                # Otros archivos: cache corto (5 minutos)
+                response.headers["Cache-Control"] = "public, max-age=300"
+        
         return response

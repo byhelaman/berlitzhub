@@ -17,10 +17,13 @@ from middleware.security_headers import SecurityHeadersMiddleware
 from session_middleware import RedisSessionMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 import security
 
 # Importar routers por dominio funcional
 from routers import auth, schedule, admin, zoom
+from zoom_oauth import close_http_client
+from middleware.static_files import CachedStaticFiles
 
 
 @asynccontextmanager
@@ -49,8 +52,12 @@ async def lifespan(app: FastAPI):
     # La aplicación se ejecuta aquí
     yield
 
-    print("Cerrando pool de conexión a la base de datos...")
+    print("Cerrando recursos de la aplicación...")
+    # Cerrar cliente HTTP compartido de Zoom
+    await close_http_client()
+    # Cerrar pool de conexiones de base de datos
     await engine.dispose()
+    print("Recursos cerrados correctamente.")
 
 
 # ============================================================================
@@ -69,8 +76,8 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.state.limiter = security.limiter
 app.add_exception_handler(RateLimitExceeded, security.rate_limit_handler)
 
-# Montar directorio de archivos estáticos (CSS, JS, imágenes)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Montar directorio de archivos estáticos (CSS, JS, imágenes) con cache optimizado
+app.mount("/static", CachedStaticFiles(directory="static"), name="static")
 
 # Configuración de templates Jinja2 (aunque se usa principalmente en middleware)
 templates = Jinja2Templates(directory="templates")

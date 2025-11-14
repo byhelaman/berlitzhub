@@ -17,7 +17,7 @@
 
       <form id="selection-form" class="selection-info" action="/delete-rows" method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <span class="selection-text">Selected: <span id="stat-selected">0</span></span>
+        <span class="selection-text">Selected: <span id="stat-selected">--</span></span>
         <input type="hidden" name="selected_ids" id="selected_ids" />
         <!-- <button type="submit" class="btn btn--icon btn--danger" aria-label="Delete selected" disabled> -->
         <button type="submit" class="btn btn--icon" aria-label="Delete selected" disabled>

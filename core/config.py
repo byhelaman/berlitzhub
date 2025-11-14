@@ -27,6 +27,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # Clave de cifrado para tokens (debe ser una clave Fernet válida en base64)
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 
+# Configuración de logging de queries SQL (False en producción para mejor rendimiento)
+# En desarrollo puede ser útil tenerlo en True para debugging
+DB_ECHO = os.getenv("DB_ECHO", "False").lower() == "true"
+
 # Validar que todas las variables críticas estén configuradas
 if not all([REDIS_URL, DATABASE_URL, ENCRYPTION_KEY]):
     raise RuntimeError(

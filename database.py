@@ -22,7 +22,7 @@ from core import config
 # La configuración del pool está optimizada para aplicaciones web con alta concurrencia
 engine = create_async_engine(
     config.DATABASE_URL,
-    echo=True,              # Log SQL queries (desactivar en producción)
+    echo=config.DB_ECHO,    # Log SQL queries (configurable vía DB_ECHO env var)
     pool_pre_ping=True,     # Verificar conexiones antes de usarlas
     pool_recycle=300,       # Reciclar conexiones después de 5 minutos
     pool_size=5,            # Tamaño base del pool de conexiones
