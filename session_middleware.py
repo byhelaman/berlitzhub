@@ -1,5 +1,6 @@
 import json
 import uuid
+import time
 import redis.asyncio as redis
 import logging
 from fastapi import Request
@@ -10,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 # Optimización: usar orjson si está disponible para serialización JSON más rápida
 try:
     import orjson
+
     _USE_ORJSON = True
 except ImportError:
     _USE_ORJSON = False
@@ -98,9 +100,13 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
         session_user_id = session_data.get("user_id")
         if session_data.get("is_authenticated") and session_user_id:
             # Verificar si tenemos datos de usuario en cache (evita query innecesario)
+            # OPTIMIZACIÓN: Usar timestamp en lugar de contador para mejor rendimiento
             cached_user = session_data.get("_cached_user")
-            needs_refresh = session_data.get("_user_cache_expiry", 0) < 0
-            
+            cache_timestamp = session_data.get("_user_cache_timestamp", 0)
+            CACHE_TTL_SECONDS = 300  # Cache por 5 minutos
+            current_time = time.time()
+            needs_refresh = (current_time - cache_timestamp) > CACHE_TTL_SECONDS
+
             if not cached_user or needs_refresh:
                 try:
                     async with AsyncSessionLocal() as db_session:
@@ -118,22 +124,29 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                             user_dict = {
                                 "id": user_db_model.id,
                                 "username": user_db_model.username,
-                                "full_name": user_db_model.full_name if user_db_model.full_name else "",
+                                "full_name": (
+                                    user_db_model.full_name
+                                    if user_db_model.full_name
+                                    else ""
+                                ),
                                 "role": user_db_model.role,
                                 "is_active": user_db_model.is_active,
                                 "zoom_user_id": user_db_model.zoom_user_id,
                             }
                             session_data["_cached_user"] = user_dict
-                            session_data["_user_cache_expiry"] = 300  # Cache por 5 minutos
-                            
+                            session_data["_user_cache_timestamp"] = current_time
+
                             request.state.user = User.model_validate(user_db_model)
                             request.state.is_authenticated = True
-                            logger.debug(f"Usuario autenticado: {user_db_model.username}")
+                            logger.debug(
+                                f"Usuario autenticado: {user_db_model.username}"
+                            )
 
-                            # --- OPTIMIZACIÓN: Solo cargar horario si no existe en sesión ---
+                            # --- OPTIMIZACIÓN: Solo cargar horario si no existe en sesión o está vacío ---
                             # El horario se carga una vez y se mantiene en sesión
                             # Se actualiza solo cuando se guarda explícitamente
-                            if "schedule_data" not in session_data or not session_data.get("schedule_data"):
+                            schedule_data = session_data.get("schedule_data")
+                            if not schedule_data or not schedule_data.get("all_rows"):
                                 db_schedule = await schedule_repo.get_by_user_id(
                                     db_session, user_db_model.id
                                 )
@@ -149,6 +162,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                             session_data["user_id"] = None
                             session_data["is_authenticated"] = False
                             session_data.pop("_cached_user", None)
+                            session_data.pop("_user_cache_timestamp", None)
                             logger.warning(
                                 f"Usuario inactivo o no encontrado: {session_user_id}"
                             )
@@ -158,10 +172,13 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                                     schedule_service.get_empty_schedule_data()
                                 )
                 except Exception as e:
-                    logger.error(f"Error de BD al buscar usuario {session_user_id}: {e}")
+                    logger.error(
+                        f"Error de BD al buscar usuario {session_user_id}: {e}"
+                    )
                     session_data["user_id"] = None
                     session_data["is_authenticated"] = False
                     session_data.pop("_cached_user", None)
+                    session_data.pop("_user_cache_timestamp", None)
                     request.state.user = None
                     request.state.is_authenticated = False
 
@@ -173,8 +190,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
                 # Usar datos cacheados (evita query a BD)
                 request.state.user = User(**cached_user)
                 request.state.is_authenticated = True
-                # Decrementar contador de expiración
-                session_data["_user_cache_expiry"] = session_data.get("_user_cache_expiry", 300) - 1
+                # No necesitamos actualizar el timestamp aquí, se mantiene hasta que expire
 
         else:
             # Es un invitado, asegurarse que tenga una estructura de horario
@@ -222,6 +238,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
 
             if new_session:
                 from core.config import IS_PRODUCTION
+
                 response.set_cookie(
                     key=SESSION_COOKIE_NAME,
                     value=session_id,

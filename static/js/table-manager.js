@@ -526,10 +526,26 @@ const manager = (function () {
         "This will restore all previously deleted rows. Are you sure?";
 
       handleFormSubmit(restoreForm, confirmMsg, (result) => {
+        // Optimización: Actualizar el DOM sin recargar la página
+        // Cambiar el estado de todas las filas eliminadas a activas
+        rowsData.forEach((item) => {
+          if (item.status === "deleted") {
+            item.status = "active";
+            item.selected = false; // Deseleccionar al restaurar
+          }
+        });
+
+        // Recalcular overlaps y renderizar
+        _calculateAllOverlaps();
+        onFilterChange(); // Esto también llama a render() y updateSelectedCount()
+        
+        // Deshabilitar el botón de restaurar si no hay más filas eliminadas
+        if (restoreBtn) {
+          const hasDeletedRows = rowsData.some((it) => it.status === "deleted");
+          restoreBtn.disabled = !hasDeletedRows;
+        }
+
         notificationManager.success(result.message);
-        setTimeout(() => {
-          location.reload();
-        }, 1000);
       });
     });
 
@@ -589,7 +605,28 @@ const manager = (function () {
     //     });
     // });
 
+    // Caché para el endpoint /schedule (evita múltiples requests innecesarios)
+    let scheduleCache = null;
+    let scheduleCacheTimestamp = 0;
+    const SCHEDULE_CACHE_TTL = 30000; // 30 segundos de caché
+
     copyScheduleAction?.addEventListener("click", () => {
+      const now = Date.now();
+      
+      // Usar caché si está disponible y no ha expirado
+      if (scheduleCache && (now - scheduleCacheTimestamp) < SCHEDULE_CACHE_TTL) {
+        navigator.clipboard.writeText(scheduleCache)
+          .then(() => {
+            notificationManager.success("Copied Schedule (from cache)");
+          })
+          .catch((err) => {
+            console.error(err);
+            notificationManager.error("Error: No se pudo copiar al portapapeles.");
+          });
+        return;
+      }
+
+      // Si no hay caché o expiró, hacer fetch
       fetch("/schedule", { method: "GET" })
         .then((res) => {
           if (!res.ok)
@@ -599,6 +636,10 @@ const manager = (function () {
           return res.text();
         })
         .then((txt) => {
+          // Guardar en caché
+          scheduleCache = txt;
+          scheduleCacheTimestamp = Date.now();
+          
           navigator.clipboard.writeText(txt);
           notificationManager.success("Copied Schedule");
         })

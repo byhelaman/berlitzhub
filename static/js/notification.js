@@ -9,7 +9,7 @@ class NotificationManager {
     constructor() {
         this.container = null;
         this.notifications = new Map();
-        // this.defaultDuration = 5000; // 5 segundos
+        this.defaultDuration = 5000; // 5 segundos
         this.init();
     }
 
@@ -85,15 +85,15 @@ class NotificationManager {
         // Header con icono y título
         const header = document.createElement("div");
         header.className = "notification__header";
-        
+
         const iconSpan = document.createElement("span");
         iconSpan.className = "notification__icon";
         iconSpan.innerHTML = icon;
-        
+
         const titleSpan = document.createElement("span");
         titleSpan.className = "notification__title";
         titleSpan.textContent = title;
-        
+
         header.appendChild(iconSpan);
         header.appendChild(titleSpan);
         content.appendChild(header);

@@ -7,25 +7,6 @@
 
     <h4 class="mb-3">User profile</h4>
 
-    {% if request.query_params.get('success') == 'zoom_linked' %}
-    <div class="form-message form-message--success mb-3">
-        Zoom account linked successfully!
-    </div>
-    {% endif %}
-
-    {% if request.query_params.get('success') == 'zoom_unlinked' %}
-    <div class="form-message form-message--success mb-3">
-        Zoom account unlinked successfully!
-    </div>
-    {% endif %}
-
-    {% if request.query_params.get('error') == 'zoom_link_failed' %}
-    <div class="form-message form-message--error">
-        {{ icons.AlertTriangleIcon(16) }}
-        Zoom account linking failed. Please try again.
-    </div>
-    {% endif %}
-
     <div class="cards-grid">
         <div class="card">
             <h5 class="card-title">User Information</h5>
@@ -77,7 +58,7 @@
         {% if user.role == 'admin' %}
         <div class="profile-card">
             <h5 class="profile-card-title">Administration</h5>
-            <a href="/admin/users" class="btn btn--primary">Gestionar Usuarios</a>
+            <a href="/admin/users" class="btn btn--primary">Manage Users</a>
         </div>
         {% endif %}
     </div>
@@ -99,7 +80,7 @@
             const innerHeight = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
 
             const left = screenLeft + (innerWidth / 2) - (width / 2);
-            const top = screenTop + (innerHeight / 2) - (height / 2);
+            const top = (screenTop + (innerHeight / 2) - (height / 2)) + 40;
 
             // Abrir popup
             const popup = window.open(

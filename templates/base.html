@@ -9,6 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&display=swap"
     rel="stylesheet" />
   <link href="{{ url_for('static', path='/css/styles.css') }}" rel="stylesheet" />
+  <!-- Favicon que cambia según el tema del navegador -->
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='/favicon.svg') }}"
+    media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='/favicon.svg') }}"
+    media="(prefers-color-scheme: dark)" />
+  <link rel="alternate icon" href="{{ url_for('static', path='/favicon.svg') }}" />
   <title>Kronos</title>
 </head>
 <script type="module" src="{{ url_for('static', path='/js/notification.js') }}"></script>
